@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, BarChart, Bar
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import {
-  TrendingUp, TrendingDown, ShieldAlert, Zap,
-  Activity, Calendar, SlidersHorizontal, RefreshCw
-} from 'lucide-react';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://reint-wind-forecast-analytics.onrender.com') + '/api';
 
@@ -51,7 +47,7 @@ export default function App() {
 
   return (
     <div style={{ padding: '24px', backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#0f172a' }}>
-
+      
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
@@ -73,12 +69,11 @@ export default function App() {
         </div>
       </div>
 
-      {/* Control Bar */}
+      {/* Control Bar with Slider */}
       <div style={{ backgroundColor: '#ffffff', padding: '16px 20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-
+        
         {/* Date Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Calendar size={18} color="#64748b" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Date Range:</span>
           <input
             type="date"
@@ -100,10 +95,9 @@ export default function App() {
         </div>
 
         {/* Dynamic Trader Risk Slider */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <SlidersHorizontal size={18} color="#64748b" />
-          <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>
-            Trader Asymmetric Risk Posture (α = {quantile.toFixed(2)}):
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#f1f5f9', padding: '8px 16px', borderRadius: '8px' }}>
+          <span style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>
+            Risk Posture (α = {Number(quantile).toFixed(2)}):
           </span>
           <input
             type="range"
@@ -116,9 +110,9 @@ export default function App() {
           />
           <button
             onClick={() => setShowBands(!showBands)}
-            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: showBands ? '#f1f5f9' : '#ffffff', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+            style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
           >
-            {showBands ? "Hide P10/P90 Bands" : "Show P10/P90 Bands"}
+            {showBands ? "Hide P10/P90" : "Show P10/P90"}
           </button>
         </div>
       </div>
@@ -126,66 +120,42 @@ export default function App() {
       {/* KPI Cards */}
       {metrics && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-
           <div style={{ backgroundColor: '#ffffff', padding: '18px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-              <span>MAE (Mean Absolute Error)</span>
-              <Activity size={18} color="#3b82f6" />
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>
-              {metrics.opt_mae_mw} MW
-            </div>
+            <div style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>MAE (Mean Absolute Error)</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>{metrics.opt_mae_mw} MW</div>
             <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginTop: '4px' }}>
               ↓ {metrics.mae_improvement_pct}% vs Raw ({metrics.raw_mae_mw} MW)
             </div>
           </div>
 
           <div style={{ backgroundColor: '#ffffff', padding: '18px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-              <span>RMSE (Tail Volatility)</span>
-              <TrendingDown size={18} color="#8b5cf6" />
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>
-              {metrics.opt_rmse_mw} MW
-            </div>
+            <div style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>RMSE (Tail Volatility)</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>{metrics.opt_rmse_mw} MW</div>
             <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginTop: '4px' }}>
               ↓ {metrics.rmse_improvement_pct}% vs Raw ({metrics.raw_rmse_mw} MW)
             </div>
           </div>
 
           <div style={{ backgroundColor: '#ffffff', padding: '18px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-              <span>Cash-Out Imbalance Penalty</span>
-              <ShieldAlert size={18} color="#ef4444" />
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>
-              {metrics.opt_imbalance_penalty_mw} MW
-            </div>
+            <div style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>Cash-Out Imbalance Penalty</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>{metrics.opt_imbalance_penalty_mw} MW</div>
             <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginTop: '4px' }}>
               ↓ {metrics.imbalance_risk_reduction_pct}% Risk Reduction
             </div>
           </div>
 
           <div style={{ backgroundColor: '#ffffff', padding: '18px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-              <span>Total Volume (MWh)</span>
-              <Zap size={18} color="#f59e0b" />
-            </div>
-            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>
-              {metrics.total_actual_mwh.toLocaleString()} MWh
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Across {metrics.record_count} Settlement Periods
-            </div>
+            <div style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>Total Delivered Volume</div>
+            <div style={{ fontSize: '24px', fontWeight: '800', marginTop: '8px', color: '#0f172a' }}>{metrics.total_actual_mwh.toLocaleString()} MWh</div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Across {metrics.record_count} Settlement Periods</div>
           </div>
-
         </div>
       )}
 
       {/* Main Graph */}
       <div style={{ backgroundColor: '#ffffff', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: '24px' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
-          Wind Generation vs Day-Ahead Forecast with P10/P90 Confidence Bands (MW)
+          Wind Generation vs Day-Ahead Forecast with P10/P90 Bounds (MW)
         </h3>
         <div style={{ height: '380px' }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -193,19 +163,19 @@ export default function App() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="startTime" tickFormatter={(v) => v.slice(5, 16).replace('T', ' ')} stroke="#94a3b8" fontSize={11} />
               <YAxis unit=" MW" stroke="#94a3b8" fontSize={11} />
-              <Tooltip labelFormatter={(l) => `Settlement Time: ${l.replace('T', ' ').replace('Z', '')}`} />
+              <Tooltip labelFormatter={(l) => `Time: ${l.replace('T', ' ').replace('Z', '')}`} />
               <Legend />
-
+              
               {showBands && (
                 <>
                   <Line type="monotone" dataKey="forecast_p90_mw" name="Upper P90 Bound" stroke="#cbd5e1" strokeDasharray="4 4" dot={false} strokeWidth={1} />
                   <Line type="monotone" dataKey="forecast_p10_mw" name="Lower P10 Bound" stroke="#cbd5e1" strokeDasharray="4 4" dot={false} strokeWidth={1} />
                 </>
               )}
-
-              <Line type="monotone" dataKey="actual_mw" name="Actual Generation (FUELHH)" stroke="#10b981" strokeWidth={2} dot={false} />
+              
+              <Line type="monotone" dataKey="actual_mw" name="Actual Wind (FUELHH)" stroke="#10b981" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="forecast_mw" name="Raw Day-Ahead (WINDFOR)" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="corrected_forecast_mw" name={`Optimized Forecast (q=${quantile})`} stroke="#6366f1" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="corrected_forecast_mw" name={`Optimized Model (q=${quantile})`} stroke="#6366f1" strokeWidth={2.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -234,7 +204,7 @@ export default function App() {
       {/* Daily Breakdown Table */}
       <div style={{ backgroundColor: '#ffffff', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
-          Daily Trajectory & Settlement Period Accuracy Breakdown
+          Daily Trajectory Breakdown
         </h3>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
