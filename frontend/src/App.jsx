@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ShieldAlert, Zap,
-  Activity, Calendar, Sliders, RefreshCw
+  Activity, Calendar, SlidersHorizontal, RefreshCw
 } from 'lucide-react';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'https://reint-wind-forecast-analytics.onrender.com') + '/api';
@@ -101,7 +101,7 @@ export default function App() {
 
         {/* Dynamic Trader Risk Slider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <Sliders size={18} color="#64748b" />
+          <SlidersHorizontal size={18} color="#64748b" />
           <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>
             Trader Asymmetric Risk Posture (α = {quantile.toFixed(2)}):
           </span>
