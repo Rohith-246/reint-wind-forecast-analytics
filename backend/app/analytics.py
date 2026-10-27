@@ -2,10 +2,10 @@
 Advanced Quantitative Wind Power Analytics & Multi-Horizon Bias Correction Engine.
 Features:
   - Diurnal cyclical harmonic detrending
-  - LightGBM machine learning residual regression
+  - LightGBM asymmetric quantile regression (Cash-Out pinball loss optimization)
+  - Aerodynamic regime & ramp acceleration feature engineering
   - Dynamic volatility regime protection
   - Physical fleet ramp-rate constraint filtering
-  - Asymmetric Cash-Out imbalance risk evaluation
   - Daily breakdown reporting for API consumer endpoints
 """
 
@@ -20,10 +20,9 @@ def enforce_fleet_ramp_limits(
     actual_series: pd.Series,
     max_ramp_mw_per_period: float = 1600.0,
 ) -> pd.Series:
-    """Enforces aerodynamic and mechanical turbine ramp limits (dP/dt).
-
-    Prevents unrealistic step-function jumps between consecutive 30-minute
-    settlement blocks.
+    """
+    Enforces aerodynamic and mechanical turbine ramp limits (dP/dt).
+    Prevents unrealistic step-function jumps between consecutive 30-minute settlement blocks.
     """
     values = forecast_series.to_numpy(copy=True)
     actuals = actual_series.to_numpy()
@@ -40,25 +39,32 @@ def enforce_fleet_ramp_limits(
     return pd.Series(values, index=forecast_series.index)
 
 
-def train_and_predict_lgb_residuals(df: pd.DataFrame) -> np.ndarray:
-    """Trains a walk-forward LightGBM regressor on engineered temporal & error features.
-
-    Predicts the raw forecast error to subtract without future lookahead
-    leakage.
+def train_and_predict_lgb_residuals(df: pd.DataFrame, target_quantile: float = 0.60) -> np.ndarray:
+    """
+    Trains a walk-forward LightGBM quantile regressor on engineered temporal,
+    aerodynamic, and error features. Directly optimizes for asymmetric imbalance risk.
     """
     df_feat = df.copy()
 
-    # Temporal & Cyclical Encodings
+    # 1. Temporal & Cyclical Harmonic Encodings
     times = pd.to_datetime(df_feat["startTime"])
     sp = df_feat["settlementPeriod"]
     df_feat["sp_sin"] = np.sin(2.0 * np.pi * sp / 48.0)
     df_feat["sp_cos"] = np.cos(2.0 * np.pi * sp / 48.0)
     df_feat["dow"] = times.dt.dayofweek
 
-    # Physical Day-Ahead Ramp Signals
+    # 2. Physical Day-Ahead Ramp Signals & Acceleration
     df_feat["fc_ramp"] = df_feat["forecast_mw"].diff().fillna(0.0)
+    df_feat["fc_accel"] = df_feat["fc_ramp"].diff().fillna(0.0)
 
-    # Strictly Lagged Error Features (No Data Leakage)
+    # 3. Aerodynamic Power Curve Regime Bins (Cut-in, Cubic Growth, Rated Saturation)
+    df_feat["capacity_band"] = pd.cut(
+        df_feat["forecast_mw"],
+        bins=[-1, 5000, 15000, 25000, 40000],
+        labels=[0, 1, 2, 3]
+    ).astype(int)
+
+    # 4. Strictly Lagged Error Features (Zero Lookahead Leakage)
     raw_error = df_feat["forecast_mw"] - df_feat["actual_mw"]
     df_feat["lag_err_1"] = raw_error.shift(1).fillna(0.0)
     df_feat["lag_err_2"] = raw_error.shift(2).fillna(0.0)
@@ -72,6 +78,8 @@ def train_and_predict_lgb_residuals(df: pd.DataFrame) -> np.ndarray:
         "sp_cos",
         "dow",
         "fc_ramp",
+        "fc_accel",
+        "capacity_band",
         "lag_err_1",
         "lag_err_2",
         "lag_err_48",
@@ -82,14 +90,17 @@ def train_and_predict_lgb_residuals(df: pd.DataFrame) -> np.ndarray:
     X = df_feat[feature_cols]
     y = raw_error
 
+    # Walk-forward window training
     train_size = max(48, int(len(df_feat) * 0.35))
     X_train, y_train = X.iloc[:train_size], y.iloc[:train_size]
 
     model = lgb.LGBMRegressor(
-        n_estimators=45,
-        max_depth=3,
-        learning_rate=0.06,
-        num_leaves=12,
+        objective="quantile",
+        alpha=target_quantile,
+        n_estimators=60,
+        max_depth=4,
+        learning_rate=0.05,
+        num_leaves=15,
         random_state=42,
         verbosity=-1,
     )
@@ -150,11 +161,11 @@ def apply_rolling_bias_correction(
     saturation_weight = 4.0 * norm_pos * (1.0 - norm_pos)
     heuristic_adjustment = (heuristic_bias + downside_hedge) * saturation_weight
 
-    # 7. Machine Learning Residual Prediction (LightGBM)
-    lgb_residuals = train_and_predict_lgb_residuals(df_sorted)
+    # 7. Machine Learning Residual Prediction (LightGBM Quantile)
+    lgb_residuals = train_and_predict_lgb_residuals(df_sorted, target_quantile=0.60)
 
     # 8. Ensemble Combination
-    blended_adjustment = 0.5 * heuristic_adjustment + 0.5 * lgb_residuals
+    blended_adjustment = 0.45 * heuristic_adjustment + 0.55 * lgb_residuals
 
     # 9. Bounded Ramp Enforcement
     raw_optimized = df_sorted["forecast_mw"] - blended_adjustment
