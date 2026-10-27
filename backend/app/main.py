@@ -1,18 +1,12 @@
+from typing import Optional
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-import pandas as pd
-
 from .fetcher import build_aligned_dataset
-from .analytics import calculate_metrics, get_daily_breakdown
+from .analytics import apply_rolling_bias_correction, calculate_metrics, get_daily_breakdown
 
-app = FastAPI(
-    title="UK Wind Power Forecast Analytics API",
-    description="Day-ahead forecast error evaluation for wholesale energy trading",
-    version="1.0.0"
-)
+app = FastAPI(title="UK Wind Power Forecast Analytics")
 
-# Enable CORS for React frontend (local dev and production)
+# Enable CORS for local testing and cloud deployments
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,64 +15,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory dataframe cache loaded at startup
-df_cache: pd.DataFrame = pd.DataFrame()
+dataset_state = {}
 
-
-from .analytics import calculate_metrics, get_daily_breakdown, apply_rolling_bias_correction
 
 @app.on_event("startup")
 def load_data():
-    global df_cache
-    print("Loading aligned January 2026 wind power data...")
     raw_df = build_aligned_dataset()
-    df_cache = apply_rolling_bias_correction(raw_df)
-    print(f"Data ready with {len(df_cache)} records and bias correction applied.")
-
+    dataset_state["raw"] = raw_df
+    dataset_state["processed"] = apply_rolling_bias_correction(raw_df, target_quantile=0.60)
+    print("Application startup complete. Baseline quantile q=0.60 calibrated.")
 
 
 @app.get("/api/health")
-def health_check():
-    return {"status": "ok", "records_loaded": len(df_cache)}
+def health():
+    return {"status": "ok", "records": len(dataset_state.get("raw", []))}
 
 
 @app.get("/api/data")
-def get_time_series_data(
-    start_date: Optional[str] = Query(None, description="Format: YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="Format: YYYY-MM-DD")
+def get_data(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    quantile: float = Query(0.60, ge=0.10, le=0.90),
 ):
-    """Returns 30-minute settlement period series filtered by optional date range."""
-    global df_cache
-    if df_cache.empty:
+    df = dataset_state.get("raw")
+    if df is None or df.empty:
         return []
 
-    filtered = df_cache.copy()
+    # Recalibrate dynamically if custom quantile is selected
+    if abs(quantile - 0.60) > 0.001:
+        processed = apply_rolling_bias_correction(df, target_quantile=quantile)
+    else:
+        processed = dataset_state["processed"]
+
+    filtered = processed.copy()
     if start_date:
-        filtered = filtered[filtered['startTime'] >= f"{start_date}T00:00:00Z"]
+        filtered = filtered[filtered["startTime"] >= f"{start_date}T00:00:00Z"]
     if end_date:
-        filtered = filtered[filtered['startTime'] <= f"{end_date}T23:59:59Z"]
+        filtered = filtered[filtered["startTime"] <= f"{end_date}T23:59:59Z"]
 
     return filtered.to_dict(orient="records")
 
 
 @app.get("/api/metrics")
-def get_metrics_summary(
-    start_date: Optional[str] = Query(None, description="Format: YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="Format: YYYY-MM-DD")
+def get_metrics(
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    quantile: float = Query(0.60, ge=0.10, le=0.90),
 ):
-    """Calculates summary KPIs (MAE, RMSE, Bias, MAPE, totals) for the selected range."""
-    global df_cache
-    filtered = df_cache.copy()
-    if start_date:
-        filtered = filtered[filtered['startTime'] >= f"{start_date}T00:00:00Z"]
-    if end_date:
-        filtered = filtered[filtered['startTime'] <= f"{end_date}T23:59:59Z"]
+    df = dataset_state.get("raw")
+    if df is None or df.empty:
+        return {}
 
-    return calculate_metrics(filtered)
+    if abs(quantile - 0.60) > 0.001:
+        processed = apply_rolling_bias_correction(df, target_quantile=quantile)
+    else:
+        processed = dataset_state["processed"]
+
+    filtered = processed.copy()
+    if start_date:
+        filtered = filtered[filtered["startTime"] >= f"{start_date}T00:00:00Z"]
+    if end_date:
+        filtered = filtered[filtered["startTime"] <= f"{end_date}T23:59:59Z"]
+
+    return calculate_metrics(filtered, target_quantile=quantile)
 
 
 @app.get("/api/metrics/daily")
 def get_daily_metrics():
-    """Returns daily trend of MAE, RMSE, and bias across the month."""
-    global df_cache
-    return get_daily_breakdown(df_cache)
+    df = dataset_state.get("processed")
+    if df is None or df.empty:
+        return []
+    return get_daily_breakdown(df)
