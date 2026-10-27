@@ -12,7 +12,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = (import.meta.env.VITE_API_URL || 'https://reint-wind-forecast-analytics.onrender.com') + '/api';
+
 
 export default function App() {
   const [metrics, setMetrics] = useState(null);
